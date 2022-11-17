@@ -1,4 +1,6 @@
 # need to run "pip install -r requirements.txt"
+from base64 import b64encode
+import secrets
 import sys
 import logging
 import os
@@ -18,9 +20,9 @@ class AzureResourceProvisioner:
         self.logger = logger
         self.include_groups = include_groups
         self.blobs = ['stage1', 'stage2', 'stage3', 'oea']
-        self.dirs = ['stage1/transactional','stage2/ingested','stage2/refined','oea/sandboxes/sandbox1/stage1/transactional',\
-            'oea/sandboxes/sandbox1/stage2/ingested','oea/sandboxes/sandbox1/stage2/refined','oea/sandboxes/sandbox1/stage3',\
-                'oea/dev/stage1/transactional','oea/dev/stage2/ingested','oea/dev/stage2/refined','oea/dev/stage3']
+        self.dirs = ['stage1/Transactional','stage2/Ingested','stage2/Refined','oea/sandboxes/sandbox1/stage1/Transactional',\
+            'oea/sandboxes/sandbox1/stage2/Ingested','oea/sandboxes/sandbox1/stage2/Refined','oea/sandboxes/sandbox1/stage3',\
+                'oea/dev/stage1/Transactional','oea/dev/stage2/Ingested','oea/dev/stage2/Refined','oea/dev/stage3']
         self.keyvault = 'kv-oea-' + oea_suffix
         self.synapse_workspace_name = 'syn-oea-' + oea_suffix
         self.resource_group = 'rg-oea-' + oea_suffix
@@ -78,7 +80,6 @@ class AzureResourceProvisioner:
         self.storage_account_object = self.azure_client.create_storage_account(self.storage_account)
         self.logger.info("\t--> Creating storage account containers.")
         self.azure_client.create_containers_and_directories(self.storage_account, self.blobs, self.dirs)
-        self.azure_client.setup_file_system(self.storage_account)
 
     def create_synapse_architecture(self):
         self.synapse_workspace_object = self.azure_client.create_synapse_workspace(self.synapse_workspace_name, self.storage_account)
@@ -88,11 +89,19 @@ class AzureResourceProvisioner:
         self.logger.info("\t--> Creating firewall rule for accessing Synapse Workspace.")
         self.azure_client.add_firewall_rule_for_synapse('allowAll', '0.0.0.0', '255.255.255.255', self.synapse_workspace_name)
 
-        self.logger.info("\t--> Creating spark pool.")
-        self.azure_client.create_spark_pool(self.synapse_workspace_name, "spark3p1sm")
-        library_requirements = f"{os.path.dirname(__file__)}/requirements.txt"
-        # Creating pool with requirements is not working, so as a work around we create pool and update it.
-        self.azure_client.update_spark_pool_with_requirements(self.synapse_workspace_name, "spark3p1sm", library_requirements)
+        self.logger.info("\t--> Creating spark pools.")
+        self.azure_client.create_spark_pool(self.synapse_workspace_name, "spark3p2sm",
+                {
+                      "node_size": "small",
+                      "max_node_count": 5
+                }
+            )
+        self.azure_client.create_spark_pool(self.synapse_workspace_name, "spark3p2med",
+                {
+                      "node_size": "medium",
+                      "max_node_count": 10
+                }
+            )
 
     def create_keyvault_and_appinsights(self):
         access_policy_for_synapse = { 'tenant_id': self.tenant_id, 'object_id': self.synapse_workspace_object.identity.principal_id,
@@ -102,7 +111,7 @@ class AzureResourceProvisioner:
                                     'permissions': { 'keys': ['all'], 'secrets': ['all'] }
                                 }
         self.azure_client.create_key_vault(self.keyvault, [access_policy_for_synapse, access_policy_for_user])
-        # self.azure_client.create_secret_in_keyvault(self.keyvault, 'oeaSalt')
+        self.azure_client.create_secret_in_keyvault(self.keyvault, 'oeaSalt', b64encode(secrets.token_bytes(16)).decode())
         self.logger.info(f"--> Creating app-insights: {self.app_insights}")
         os.system(f"az monitor app-insights component create --app {self.app_insights} --resource-group {self.resource_group} --location {self.location} --tags {self.tags} -o none")
 

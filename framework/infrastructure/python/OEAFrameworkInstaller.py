@@ -1,7 +1,8 @@
 import os
+from AzureClient import AzureClient
 
 class OEAFrameworkInstaller:
-    def __init__(self, azure_client, storage_account, keyvault, synapse_workspace, framework_path_relative, logger):
+    def __init__(self, azure_client:AzureClient, storage_account, keyvault, synapse_workspace, framework_path_relative, logger):
         self.azure_client = azure_client
         self.storage_account = storage_account
         self.keyvault = keyvault
@@ -50,10 +51,7 @@ class OEAFrameworkInstaller:
         for notebook in notebooks:
             try:
                 self.replace_strings(f"{self.framework_path_relative}/notebook/{notebook}")
-                if('json' in notebook):
-                    self.azure_client.create_notebook(f"{self.framework_path_relative}/notebook/{notebook}", self.synapse_workspace)
-                else:
-                    self.azure_client.create_notebook_with_ipynb(notebook.split('.')[0], f"{self.framework_path_relative}/notebook/{notebook}", self.synapse_workspace)
+                self.azure_client.create_notebook(f"{self.framework_path_relative}/notebook/{notebook}", self.synapse_workspace, 'ipynb')
             except Exception as e:
                 self.logger.error(f"Failed to install the Notebook - {notebook.split('.')[0]} : {str(e)}")
 

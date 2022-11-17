@@ -8,6 +8,7 @@ from base64 import b64encode
 from uuid import uuid4
 from datetime import datetime
 from azure.identity import AzureCliCredential, DefaultAzureCredential
+from azure.keyvault.secrets import SecretClient
 from azure.mgmt.authorization import AuthorizationManagementClient
 from azure.mgmt.authorization.v2018_09_01_preview import models as authorization_model
 from azure.mgmt.resource import ResourceManagementClient
@@ -26,6 +27,7 @@ class AzureClient:
     """ todo: consider removing self.resource_group_name - it should probably be passed in as needed """
     def __init__(self, tenant_id, subscription_id, location = 'eastus', default_tags = None, resource_group_name = None):
         self.credential = AzureCliCredential()
+        self.default_credential = DefaultAzureCredential()
         self.tenant_id = tenant_id
         self.subscription_id = subscription_id
         self.location = location
@@ -33,6 +35,7 @@ class AzureClient:
         self.resource_group_name = resource_group_name
         self.datalake_client = None
         self.resource_group = None
+        self.secret_client = None
         self.key_vault_client = None
         self.resource_client = None
         self.graph_rbac_client = None
@@ -52,8 +55,12 @@ class AzureClient:
         return self.resource_client
 
     def get_key_vault_client(self):
-        if not self.key_vault_client: self.key_vault_client = KeyVaultManagementClient(self.credential, self.subscription_id, api_version='2021-10-01')
+        if not self.key_vault_client: self.key_vault_client = KeyVaultManagementClient(self.credential, self.subscription_id)
         return self.key_vault_client
+
+    def get_secret_client(self, keyvault_name):
+        if not self.secret_client: self.secret_client = SecretClient(f"https://{keyvault_name}.vault.azure.net", self.default_credential)
+        return self.secret_client
 
     def get_datalake_client(self, account_key):
         if not self.datalake_client: self.datalake_client = DataLakeServiceClient(account_url=f"https://{self.storage_account_name}.dfs.core.windows.net", credential={"account_name":self.storage_account_name, "account_key": account_key})
@@ -97,15 +104,8 @@ class AzureClient:
             }
     )
 
-    def create_secret_in_keyvault(self, keyvault_name, secret_name):
-        """poller = self.get_key_vault_client().secrets.create_or_update(self.resource_group, keyvault_name, secret_name,
-            {
-                'properties': {
-                    'value': b64encode(secrets.token_bytes(16)).decode()
-                }
-            }
-        )"""
-        os.system(f"az keyvault secret set --name oeaSalt --vault-name {keyvault_name} --value {b64encode(secrets.token_bytes(16)).decode()}")
+    def create_secret_in_keyvault(self, keyvault_name, secret_name, secret_value):
+        poller = self.get_secret_client(keyvault_name).set_secret(secret_name, secret_value)
 
     """
     # This is not working as the GraphRbacManagementClient is expecting a credential with an
@@ -131,16 +131,21 @@ class AzureClient:
             poller = self.get_artifacts_client(synapse_workspace).pipeline.begin_create_or_update_pipeline(pipeline_name, pipeline_dict)
             return poller
 
-    def create_notebook_with_ipynb(self, notebook_name, file_path, synapse_workspace_name):
-        os.system(f"az synapse notebook create --workspace-name {synapse_workspace_name} --name {notebook_name} --file @{file_path} -o none")
-
     def create_notebook(self, notebook_filename, synapse_workspace_name):
         """ Creates synapse notebook from json (using the json from git when Synapse studio is connected to a repo) """
         artifacts_client = self.get_artifacts_client(synapse_workspace_name)
-        with open(notebook_filename) as f: notebook_dict = json.load(f)
+        with open(notebook_filename) as f:
+            if(notebook_filename.split('.')[-1] == 'json'):
+                notebook_dict = json.load(f)
+                notebook_name = notebook_dict['name']
+            elif(notebook_filename.split('.')[-1] == 'ipynb'):
+                notebook_dict = json.loads(f.read())
+                notebook_name = notebook_filename.split('/')[-1].split('.')[0]
+            else:
+                raise ValueError('Notebook format not supported.')
         self.validate_notebook_json(notebook_dict)
-        logger.info(f"Creating notebook: {notebook_dict['name']}")
-        poller = artifacts_client.notebook.begin_create_or_update_notebook(notebook_dict['name'], notebook_dict)
+        logger.info(f"Creating notebook: {notebook_name}")
+        poller = artifacts_client.notebook.begin_create_or_update_notebook(notebook_name, notebook_dict)
         return poller #AzureOperationPoller
 
     def validate_notebook_json(self, nb_json):
@@ -198,7 +203,7 @@ class AzureClient:
 
     def create_synapse_workspace(self, synapse_workspace_name, storage_account_name):
         """ https://docs.microsoft.com/en-us/python/api/azure-mgmt-synapse/azure.mgmt.synapse.aio.operations.workspacesoperations?view=azure-python#begin-create-or-update-resource-group-name--str--workspace-name--str--workspace-info--azure-mgmt-synapse-models--models-py3-workspace----kwargs-----azure-core-polling--async-poller-asynclropoller--forwardref---models-workspace--- """
-        default_data_lake_storage = DataLakeStorageAccountDetails(account_url=f"https://{storage_account_name}.dfs.core.windows.net", filesystem="synapse-workspace")
+        default_data_lake_storage = DataLakeStorageAccountDetails(account_url=f"https://{storage_account_name}.dfs.core.windows.net", filesystem="oea")
 
         poller = self.get_synapse_client().workspaces.begin_create_or_update(self.resource_group_name, synapse_workspace_name,
             {
@@ -206,7 +211,7 @@ class AzureClient:
                 "tags" : self.tags,
                 "identity" : ManagedIdentity(type="SystemAssigned"),
                 "default_data_lake_storage" : default_data_lake_storage,
-                "sql_administrator_login" : "oea-admin",
+                "sql_administrator_login" : "eduanalyticsuser",
                 "sql_administrator_login_password" : AzureClient.create_random_password(),
             }
         )
@@ -290,32 +295,41 @@ class AzureClient:
         )
         return poller
 
-    def create_spark_pool(self, synapse_workspace_name, spark_pool_name):
-        """ https://docs.microsoft.com/en-us/python/api/azure-mgmt-synapse/azure.mgmt.synapse.aio.operations.bigdatapoolsoperations?view=azure-python """
-        #os.system(f"az synapse spark pool create --name {spark_pool_name} --workspace-name {synapse_workspace_name} --resource-group {self.resource_group_name} "
-        #           "--spark-version 3.1 --node-count 3 --node-size Small --min-node-count 3 --max-node-count 10 --enable-auto-scale true --delay 15 --enable-auto-pause true")
-        #Now update spark pool to include required libraries (note that this has to be done as a separate step or the create command will fail, despite what the docs say)
-        #os.system(f"az synapse spark pool update --name {spark_pool_name} --workspace-name {synapse_workspace_name} --resource-group {self.resource_group_name} --library-requirements {library_requirements} --no-wait")
+    def create_spark_pool(self, synapse_workspace_name, spark_pool_name, options=None):
+        """ Creates the Spark Pool based on the options parameter and updates the pool with the required library requirements.
+
+            :param node_size: size of the spark node. Defaulted to small
+            :type node_size: str
+            :param min_node_count: minimum node count for the spark pool
+            :param min_node_count: int
+            :param max_node_count: minimum node count for the spark pool
+            :param max_node_count: int
+            https://docs.microsoft.com/en-us/python/api/azure-mgmt-synapse/azure.mgmt.synapse.aio.operations.bigdatapoolsoperations?view=azure-python """
+        if not options: options = {}
+        min_node_count = options.pop('min_node_count', 3)
+        max_node_count = options.pop('max_node_count', 5)
+        node_size = options.pop('node_size', 'small')
+        if node_size == 'small': node_size = NodeSize.SMALL
+        elif node_size == 'medium': node_size = NodeSize.MEDIUM
+        elif node_size == 'large': node_size = NodeSize.LARGE
+        elif node_size == 'xlarge': node_size = NodeSize.X_LARGE
+        elif node_size == 'xxlarge': node_size = NodeSize.XX_LARGE
+        else: raise ValueError('Invalid Node Size.')
+
         poller = self.get_synapse_client().big_data_pools.begin_create_or_update(self.resource_group_name, synapse_workspace_name, spark_pool_name,
             BigDataPoolResourceInfo(
                 tags = self.tags,
                 location = self.location,
-                auto_scale = AutoScaleProperties(enabled=True, min_node_count=3, max_node_count=10),
+                auto_scale = AutoScaleProperties(enabled=True, min_node_count=min_node_count, max_node_count=max_node_count),
                 auto_pause = AutoPauseProperties(delay_in_minutes=15, enabled=True),
-                spark_version = '3.1',
-                node_size = NodeSize.SMALL,
+                spark_version = '3.2',
+                node_size = node_size,
                 node_size_family = NodeSizeFamily.MEMORY_OPTIMIZED,
             )
         )
-
-        # todo: now install the requirements file, this can only be done after the pool has been created
-        #echo "--> Update spark pool to include required libraries (note that this has to be done as a separate step or the create command will fail, despite what the docs say)."
-        #az synapse spark pool update --name spark3p1sm --workspace-name $OEA_SYNAPSE --resource-group $OEA_RESOURCE_GROUP --library-requirements $oea_path/framework/requirements.txt --no-wait
-        #[[ $? != 0 ]] && { echo "Provisioning of azure resource failed. See $logfile for more details." 1>&3; exit 1; }
         result = poller.result() # wait for completion of spark pool
-
-
-        return
+        library_requirements = f"{os.path.dirname(__file__)}/requirements.txt"
+        self.update_spark_pool_with_requirements(synapse_workspace_name, spark_pool_name, library_requirements)
 
     def update_spark_pool_with_requirements(self, synapse_workspace_name, spark_pool_name, library_requirements_path_and_filename):
         with open(library_requirements_path_and_filename, 'r') as f: lib_contents = f.read()
