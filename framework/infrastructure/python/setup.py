@@ -24,11 +24,11 @@ _location = "eastus" if len(sys.argv) < 3 else sys.argv[2]
 _include_groups = True if (len(sys.argv) > 3 and sys.argv[3] in ['true', 'True']) else False
 
 # Instantiate AzureClient class to connect with Azure CLI using Python SDK
-azure_client = AzureClient(_tenant_id, _subscription_id, _location)
+azure_client = AzureClient(_tenant_id, _subscription_id, _location, default_tags={'oea_version':_oea_version})
 
 # Instantiate AzureResourceProvisioner class to setup the required infrastructure in your Azure Tenant.
 _logger.info('Setting up infrastructure in Azure Tenant.')
-resource_provisioner = AzureResourceProvisioner(_tenant_id, _subscription_id, _oea_suffix, _location, _oea_version, _include_groups, _logger)
+resource_provisioner = AzureResourceProvisioner(azure_client, _oea_suffix, _oea_version, _include_groups, _logger)
 resource_provisioner.provision_resources()
 _logger.info('Completed setting up infrastructure.')
 

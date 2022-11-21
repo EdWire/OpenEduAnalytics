@@ -85,14 +85,8 @@ class AzureClient:
         roles = list(auth_client.role_definitions.list(resource_id, filter="roleName eq '{}'".format(role_name)))
         return roles[0]
 
-    # ref info: https://docs.microsoft.com/en-us/python/api/azure-mgmt-keyvault/azure.mgmt.keyvault.keyvaultmanagementclient?view=azure-python#vaults
-    # example: https://docs.microsoft.com/en-us/samples/azure-samples/resource-manager-python-resources-and-groups/manage-azure-resources-and-resource-groups-with-python/#create-resource
     def create_key_vault(self, key_vault_name, access_policies):
-        #availability_result = self.get_key_vault_client().vaults.check_name_availability({ "name": key_vault_name }  )
-        #if not availability_result.name_available:
-        #    logger.error(f"Key Vault name {key_vault_name} is not available. Try another name.")
-        #    exit()
-
+        """ Creates a keyvault with the given name and access policies, waits for the creation to finish an returns the keyvault object """
         poller = self.get_key_vault_client().vaults.begin_create_or_update(self.resource_group_name, key_vault_name,
             {
                 'location': self.location,
@@ -102,37 +96,34 @@ class AzureClient:
                     'access_policies': access_policies
                 }
             }
-    )
+        )
+        return poller.result()
 
     def create_secret_in_keyvault(self, keyvault_name, secret_name, secret_value):
-        poller = self.get_secret_client(keyvault_name).set_secret(secret_name, secret_value)
-
-    """
-    # This is not working as the GraphRbacManagementClient is expecting a credential with an
-    # attribute "signed_session" while AzureCliCredential does not provide one.
-    def create_aad_group(self, display_name, nick_name):
-        poller = self.get_graph_rbac_client().groups.create(
-            {
-                'display_name':display_name,
-                'mail_nickname':nick_name
-            }
-        )
-        return poller
-    """
+        """ Creates or updates a secret in the keyvault with the given value """
+        self.get_secret_client(keyvault_name).set_secret(secret_name, secret_value)
 
     def create_or_update_dataflow(self, synapse_workspace, dataflow_file_path):
+        """ Creates or updates the Dataflow in the given Synapse studio.
+            Expects the dataflow configuration file in JSON format.
+        """
         with open(dataflow_file_path) as f: dataflow_dict = json.load(f)
         poller = self.get_artifacts_client(synapse_workspace).data_flow.begin_create_or_update_dataflow(dataflow_dict['name'], dataflow_dict)
         return poller
 
     def create_or_update_pipeline(self, synapse_workspace, pipeline_file_path, pipeline_name):
+        """ Creates or updates the Pipeline in the given Synapse studio.
+            Expects the pipeline configuration file in JSON format.
+        """
         with open(pipeline_file_path) as f: pipeline_dict = json.load(f)
         if '$schema' not in pipeline_dict.keys():
             poller = self.get_artifacts_client(synapse_workspace).pipeline.begin_create_or_update_pipeline(pipeline_name, pipeline_dict)
             return poller
 
     def create_notebook(self, notebook_filename, synapse_workspace_name):
-        """ Creates synapse notebook from json (using the json from git when Synapse studio is connected to a repo) """
+        """ Creates or updates the Notebook in the given Synapse studio.
+            Expects the dataflow configuration file in JSON or ipynb format.
+        """
         artifacts_client = self.get_artifacts_client(synapse_workspace_name)
         with open(notebook_filename) as f:
             if(notebook_filename.split('.')[-1] == 'json'):
@@ -183,11 +174,13 @@ class AzureClient:
         return poller
 
     def delete_resource_group(self, name):
+        """ Deletes the given resource group from the subscription. """
         self.get_resource_client().resource_groups.begin_delete(name)
         self.resource_group_name = None
         self.resource_group = None
 
     def create_resource_group(self, resource_group_name, tags=None):
+        """ Creates an empty resource group in the Azure Subscription """
         if not tags: tags = {}
         result = self.get_resource_client().resource_groups.create_or_update(resource_group_name, {'location': self.location, 'tags': tags})
         self.resource_group = result
@@ -202,7 +195,7 @@ class AzureClient:
         return resources
 
     def create_synapse_workspace(self, synapse_workspace_name, storage_account_name):
-        """ https://docs.microsoft.com/en-us/python/api/azure-mgmt-synapse/azure.mgmt.synapse.aio.operations.workspacesoperations?view=azure-python#begin-create-or-update-resource-group-name--str--workspace-name--str--workspace-info--azure-mgmt-synapse-models--models-py3-workspace----kwargs-----azure-core-polling--async-poller-asynclropoller--forwardref---models-workspace--- """
+        """ Creates a Synapse workspace, waits for the creation to finish and returns the synapse workspace object """
         default_data_lake_storage = DataLakeStorageAccountDetails(account_url=f"https://{storage_account_name}.dfs.core.windows.net", filesystem="oea")
 
         poller = self.get_synapse_client().workspaces.begin_create_or_update(self.resource_group_name, synapse_workspace_name,
@@ -215,18 +208,12 @@ class AzureClient:
                 "sql_administrator_login_password" : AzureClient.create_random_password(),
             }
         )
-        # Call poller.result() to wait for completion
-        # returns a synapse Workspace object
+
         return poller.result()
 
     def create_storage_account(self, storage_account_name):
+        """ Create a storage account, waits for the creation to complete and returns the storage account object """
         storage_client = self.get_storage_client()
-        # Check if the account name is available.
-        #availability_result = storage_client.storage_accounts.check_name_availability({ "name": storage_account_name })
-        #if not availability_result.name_available:
-            #logger.error(f"Storage name {storage_account_name} is already in use. Try another name.")
-            #exit()
-
         poller = storage_client.storage_accounts.begin_create(self.resource_group_name, storage_account_name,
             {
                 "location" : self.location,
@@ -238,12 +225,12 @@ class AzureClient:
                 "default-action": "Allow"
             }
         )
-        # Call poller.result() to wait for completion
         account_result = poller.result()
         self.storage_account_name = storage_account_name
         return account_result
 
     def create_containers_and_directories(self, storage_account_name, container_names, directory_list):
+        """ Creates the given containers and directories in a given storage account """
         storage_client = self.get_storage_client()
         keys = storage_client.storage_accounts.list_keys(self.resource_group_name, storage_account_name)
         conn_string = f"DefaultEndpointsProtocol=https;EndpointSuffix=core.windows.net;AccountName={storage_account_name};AccountKey={keys.keys[0].value}"
@@ -255,21 +242,21 @@ class AzureClient:
                 self.get_datalake_client(keys.keys[0].value).get_file_system_client(name).create_directory(directory_path)
 
     def create_linked_service(self, workspace_name, linked_service_name, file_path):
+        """ Creates a linked service in the Synapse studio.
+            Expects a linked service configuration file in JSON format
+        """
+        # This currently uses Azure CLI, need to modify this to use Python SDK
         os.system(f"az synapse linked-service create --workspace-name {workspace_name} --name {linked_service_name} --file @{file_path} -o none")
 
     def create_dataset(self, workspace_name, dataset_name, file_path):
+        """ Creates a dataset in the Synapse studio.
+            Expects a dataset configuration file in JSON format
+        """
+        # This currently uses Azure CLI, need to modify this to use Python SDK
         os.system(f"az synapse dataset create --workspace-name {workspace_name} --name {dataset_name} --file @{file_path} -o none")
 
-
-    def add_role_assignment_to_resource(self, role_name, resource_id, principal_id):
-        role = self.get_role(role_name, resource_id)
-        self.get_authorization_client().role_assignments.create(resource_id, uuid4(),
-            authorization_model.RoleAssignmentCreateParameters(role_definition_id=role.id, principal_id=principal_id)
-        )
-        return
-
     def create_role_assignment(self, role_name, resource_id, principal_id):
-        # https://docs.microsoft.com/en-us/python/api/azure-mgmt-authorization/azure.mgmt.authorization.v2020_10_01_preview.operations.roleassignmentsoperations?view=azure-python#create-scope--role-assignment-name--parameters----kwargs-
+        """ Creates a role assignment for an Azure resource for a given Service Principal """
         role = self.get_role(role_name, resource_id)
         try:
             self.get_authorization_client().role_assignments.create(resource_id, uuid4(),
@@ -279,13 +266,10 @@ class AzureClient:
             )
         except ResourceExistsError as e:
             logger.info(f"The {role_name} role assignment already exists for {principal_id} on resource {resource_id}.")
-            #print(f"The {role_name} role assignment already exists for {principal_id} on resource {resource_id}.")
 
     def add_firewall_rule_for_synapse(self, rule_name, start_ip_address, end_ip_address, synapse_workspace_name):
-        """ https://docs.microsoft.com/en-us/python/api/azure-mgmt-synapse/azure.mgmt.synapse.aio.operations.ipfirewallrulesoperations?view=azure-python """
-        #os.system(f"az synapse workspace firewall-rule create --name allowAll --workspace-name {synapse_workspace_name} --resource-group {self.resource_group_name} --start-ip-address 0.0.0.0 --end-ip-address 255.255.255.255")
+        """ Create a Firewall rule for the Azure Synapse Studio """
         ip_firewall_rule_info = IpFirewallRuleInfo(name=rule_name, start_ip_address=start_ip_address, end_ip_address=end_ip_address)
-        #poller = self.get_synapse_client().ip_firewall_rules.begin_create_or_update(self.resource_group_name, synapse_workspace_name, rule_name, ip_firewall_rule_info)
         poller = self.get_synapse_client().ip_firewall_rules.begin_create_or_update(self.resource_group_name, synapse_workspace_name, rule_name,
             {
                 "name" : rule_name,
@@ -330,16 +314,21 @@ class AzureClient:
         result = poller.result() # wait for completion of spark pool
         library_requirements = f"{os.path.dirname(__file__)}/requirements.txt"
         self.update_spark_pool_with_requirements(synapse_workspace_name, spark_pool_name, library_requirements)
+        return result
 
     def update_spark_pool_with_requirements(self, synapse_workspace_name, spark_pool_name, library_requirements_path_and_filename):
+        """ Update the existing Spark pool by installing the required library requirements.
+            Expects a path to the text file containing the list of library requirements"""
         with open(library_requirements_path_and_filename, 'r') as f: lib_contents = f.read()
         poller = self.get_synapse_client().big_data_pools.update(self.resource_group_name, synapse_workspace_name, spark_pool_name,
             BigDataPoolPatchInfo (
                 library_requirements = LibraryRequirements(filename=os.path.basename(library_requirements_path_and_filename), content=lib_contents)
             )
         )
+        return poller.result()
 
     def create_random_password():
+        """ Creates a random password using secrets module """
         password = secrets.choice(string.ascii_uppercase) + secrets.choice(string.digits) + secrets.choice(['*', '%', '#', '@'])
         for _ in range(9): password += secrets.choice(string.ascii_lowercase)
         return password
