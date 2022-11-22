@@ -20,7 +20,7 @@ class OEAFrameworkInstaller:
             f.write(data)
 
     def install_linked_services(self):
-        if(os.path.isdir(f'{self.framework_path_relative}/linkedService/' is False)):
+        if(os.path.isdir(f'{self.framework_path_relative}/linkedService/') is False):
             self.logger.info('No Linked Service to Install.')
             return
         linked_services = os.listdir(f'{self.framework_path_relative}/linkedService/')
@@ -32,7 +32,7 @@ class OEAFrameworkInstaller:
                 self.logger.error(f"Failed to install the Linked Service - {ls.split('.')[0]} : {str(e)}")
 
     def install_datasets(self):
-        if(os.path.isdir(f'{self.framework_path_relative}/dataset/' is False)):
+        if(os.path.isdir(f'{self.framework_path_relative}/dataset/') is False):
             self.logger.info('No Dataset to Install.')
             return
         datasets = os.listdir(f'{self.framework_path_relative}/dataset/')
@@ -44,7 +44,7 @@ class OEAFrameworkInstaller:
                 self.logger.error(f"Failed to install the Dataset - {dataset.split('.')[0]} : {str(e)}")
 
     def install_notebooks(self):
-        if(os.path.isdir(f'{self.framework_path_relative}/notebook/' is False)):
+        if(os.path.isdir(f'{self.framework_path_relative}/notebook/') is False):
             self.logger.info('No Notebook to Install.')
             return
         notebooks = os.listdir(f'{self.framework_path_relative}/notebook/')
@@ -56,7 +56,7 @@ class OEAFrameworkInstaller:
                 self.logger.error(f"Failed to install the Notebook - {notebook.split('.')[0]} : {str(e)}")
 
     def install_pipelines(self):
-        if(os.path.isdir(f'{self.framework_path_relative}/pipeline/' is False)):
+        if(os.path.isdir(f'{self.framework_path_relative}/pipeline/') is False):
             self.logger.info('No Pipelines to Install.')
             return
         pipelines = [item for item in os.listdir(f'{self.framework_path_relative}/pipeline/') if os.path.isfile(f'{self.framework_path_relative}/pipeline/{item}')]
@@ -68,7 +68,7 @@ class OEAFrameworkInstaller:
                 self.logger.error(f"Failed to install the Pipeline - {pipeline.split('.')[0]} : {str(e)}")
 
     def install_dataflows(self):
-        if(os.path.isdir(f'{self.framework_path_relative}/dataflow/' is False)):
+        if(os.path.isdir(f'{self.framework_path_relative}/dataflow/') is False):
             self.logger.info('No Dataflows to Install.')
             return
         dataflows = [item for item in os.listdir(f'{self.framework_path_relative}/dataflow/') if os.path.isfile(f'{self.framework_path_relative}/pipeline/{item}')]
