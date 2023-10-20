@@ -26,6 +26,9 @@ echo "--> Setting up the Ed-Fi module assets for version $version."
 eval "az synapse notebook import --workspace-name $synapse_workspace --name EdFi_Land --spark-pool-name spark3p3sm --file @$version_dir/notebook/EdFi_Land.ipynb --only-show-errors"
 eval "az synapse notebook import --workspace-name $synapse_workspace --name EdFi_Ingest --spark-pool-name spark3p3sm --file @$version_dir/notebook/EdFi_Ingest.ipynb --only-show-errors"
 eval "az synapse notebook import --workspace-name $synapse_workspace --name EdFi_Refine --spark-pool-name spark3p3sm --file @$version_dir/notebook/EdFi_Refine.ipynb --only-show-errors"
+eval "az synapse notebook import --workspace-name $synapse_workspace --name edfi_fetch_urls --spark-pool-name spark3p3sm --file @$version_dir/notebook/edfi_fetch_urls.ipynb --only-show-errors"
+eval "az synapse notebook import --workspace-name $synapse_workspace --name edfi_py --spark-pool-name spark3p3sm --file @$version_dir/notebook/edfi_py.ipynb --only-show-errors"
+
 
 # 3) Setup pipelines
 # Note that the ordering below matters because pipelines that are referred to by other pipelines must be created first.
