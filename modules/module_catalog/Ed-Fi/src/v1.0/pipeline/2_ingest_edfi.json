@@ -1,9 +1,9 @@
 {
-    "name": "1_land_edfi",
+    "name": "2_ingest_edfi",
     "properties": {
         "activities": [
             {
-                "name": "Run_EdFi_Land",
+                "name": "Run EdFi_Ingest",
                 "type": "SynapseNotebook",
                 "dependsOn": [],
                 "policy": {
@@ -16,27 +16,13 @@
                 "userProperties": [],
                 "typeProperties": {
                     "notebook": {
-                        "referenceName": "EdFi_Land",
+                        "referenceName": "EdFi_Ingest",
                         "type": "NotebookReference"
                     },
                     "parameters": {
                         "workspace": {
                             "value": {
-                                "value": "@pipeline().parameters.workspace",
-                                "type": "Expression"
-                            },
-                            "type": "string"
-                        },
-                        "batchLimit": {
-                            "value": {
-                                "value": "@pipeline().parameters.ApiLimit",
-                                "type": "Expression"
-                            },
-                            "type": "int"
-                        },
-                        "kvName": {
-                            "value": {
-                                "value": "@pipeline().parameters.kvName",
+                                "value": "@pipeline().parameters.Workspace",
                                 "type": "Expression"
                             },
                             "type": "string"
@@ -44,20 +30,6 @@
                         "moduleName": {
                             "value": {
                                 "value": "@pipeline().parameters.ModuleName",
-                                "type": "Expression"
-                            },
-                            "type": "string"
-                        },
-                        "minChangeVer": {
-                            "value": {
-                                "value": "@pipeline().parameters.MinChangeVer",
-                                "type": "Expression"
-                            },
-                            "type": "string"
-                        },
-                        "maxChangeVer": {
-                            "value": {
-                                "value": "@pipeline().parameters.MaxChangeVer",
                                 "type": "Expression"
                             },
                             "type": "string"
@@ -105,42 +77,40 @@
             }
         ],
         "parameters": {
-            "workspace": {
-                "type": "string"
+            "ModuleName": {
+                "type": "string",
+                "defaultValue": "Ed-Fi"
             },
-            "ApiUrl": {
-                "type": "string"
+            "DistrictId": {
+                "type": "string",
+                "defaultValue": "All"
+            },
+            "SchoolYear": {
+                "type": "string",
+                "defaultValue": "2022"
+            },
+            "Workspace": {
+                "type": "string",
+                "defaultValue": "dev"
             },
             "InstanceId": {
                 "type": "string"
             },
-            "SchoolYear": {
-                "type": "string"
-            },
-            "ModuleName": {
-                "type": "string"
-            },
-            "DistrictId": {
-                "type": "string"
-            },
-            "ApiLimit": {
-                "type": "string"
-            },
-            "kvName": {
-                "type": "string"
-            },
-            "MinChangeVer": {
-                "type": "string"
-            },
-            "MaxChangeVer": {
+            "ApiUrl": {
                 "type": "string"
             }
         },
+        "variables": {
+            "CheckpointKeyFileName": {
+                "type": "String",
+                "defaultValue": "checkpoints.json"
+            }
+        },
         "folder": {
-            "name": "EdFi Module/basic"
+            "name": "OEA/Modules/Ed-Fi/v1.0"
         },
         "annotations": [],
-        "lastPublishTime": "2023-10-20T05:33:56Z"
+        "lastPublishTime": "2023-10-20T05:33:58Z"
     },
     "type": "Microsoft.Synapse/workspaces/pipelines"
 }

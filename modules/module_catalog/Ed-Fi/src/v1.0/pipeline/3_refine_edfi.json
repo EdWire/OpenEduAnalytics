@@ -1,9 +1,9 @@
 {
-    "name": "2_ingest_edfi",
+    "name": "3_refine_edfi",
     "properties": {
         "activities": [
             {
-                "name": "Run EdFi_Ingest",
+                "name": "EdFi_Refine",
                 "type": "SynapseNotebook",
                 "dependsOn": [],
                 "policy": {
@@ -16,20 +16,20 @@
                 "userProperties": [],
                 "typeProperties": {
                     "notebook": {
-                        "referenceName": "EdFi_Ingest",
+                        "referenceName": "EdFi_Refine",
                         "type": "NotebookReference"
                     },
                     "parameters": {
-                        "workspace": {
+                        "moduleName": {
                             "value": {
-                                "value": "@pipeline().parameters.Workspace",
+                                "value": "@pipeline().parameters.ModuleName",
                                 "type": "Expression"
                             },
                             "type": "string"
                         },
-                        "moduleName": {
+                        "workspace": {
                             "value": {
-                                "value": "@pipeline().parameters.ModuleName",
+                                "value": "@pipeline().parameters.Workspace",
                                 "type": "Expression"
                             },
                             "type": "string"
@@ -44,6 +44,13 @@
                         "districtId": {
                             "value": {
                                 "value": "@pipeline().parameters.DistrictId",
+                                "type": "Expression"
+                            },
+                            "type": "string"
+                        },
+                        "metadataUrl": {
+                            "value": {
+                                "value": "@pipeline().parameters.MetadataUrl",
                                 "type": "Expression"
                             },
                             "type": "string"
@@ -78,20 +85,19 @@
         ],
         "parameters": {
             "ModuleName": {
-                "type": "string",
-                "defaultValue": "Ed-Fi"
-            },
-            "DistrictId": {
-                "type": "string",
-                "defaultValue": "All"
-            },
-            "SchoolYear": {
-                "type": "string",
-                "defaultValue": "2022"
+                "type": "string"
             },
             "Workspace": {
-                "type": "string",
-                "defaultValue": "dev"
+                "type": "string"
+            },
+            "SchoolYear": {
+                "type": "string"
+            },
+            "DistrictId": {
+                "type": "string"
+            },
+            "MetadataUrl": {
+                "type": "string"
             },
             "InstanceId": {
                 "type": "string"
@@ -100,17 +106,11 @@
                 "type": "string"
             }
         },
-        "variables": {
-            "CheckpointKeyFileName": {
-                "type": "String",
-                "defaultValue": "checkpoints.json"
-            }
-        },
         "folder": {
-            "name": "EdFi Module/basic"
+            "name": "OEA/Modules/Ed-Fi/v1.0"
         },
         "annotations": [],
-        "lastPublishTime": "2023-10-20T05:33:58Z"
+        "lastPublishTime": "2023-10-20T05:34:05Z"
     },
     "type": "Microsoft.Synapse/workspaces/pipelines"
 }
