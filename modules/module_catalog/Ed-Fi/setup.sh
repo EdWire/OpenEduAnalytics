@@ -20,21 +20,25 @@ if [ ! -d "$version_dir" ]; then
     exit 1
 fi
 
+# Create a version_marker by replacing dots with underscores and adding an underscore at the end
+version_marker="${version//./_}_"
+
 echo "--> Setting up the Ed-Fi module assets for version $version."
 
 # 2) Install notebooks
-eval "az synapse notebook import --workspace-name $synapse_workspace --name EdFi_Land --spark-pool-name spark3p3sm --file @$version_dir/notebook/EdFi_Land.ipynb --only-show-errors"
-eval "az synapse notebook import --workspace-name $synapse_workspace --name EdFi_Ingest --spark-pool-name spark3p3sm --file @$version_dir/notebook/EdFi_Ingest.ipynb --only-show-errors"
-eval "az synapse notebook import --workspace-name $synapse_workspace --name EdFi_Refine --spark-pool-name spark3p3sm --file @$version_dir/notebook/EdFi_Refine.ipynb --only-show-errors"
-eval "az synapse notebook import --workspace-name $synapse_workspace --name edfi_fetch_urls --spark-pool-name spark3p3sm --file @$version_dir/notebook/edfi_fetch_urls.ipynb --only-show-errors"
-eval "az synapse notebook import --workspace-name $synapse_workspace --name edfi_py --spark-pool-name spark3p3sm --file @$version_dir/notebook/edfi_py.ipynb --only-show-errors"
-
+notebook_dir="$version_dir/notebook"
+# Rename and install notebooks with version_marker prefix
+for notebook in "EdFi_Land.ipynb" "EdFi_Ingest.ipynb" "EdFi_Refine.ipynb" "edfi_fetch_urls.ipynb" "edfi_py.ipynb"; do
+    eval "az synapse notebook import --workspace-name $synapse_workspace --name ${version_marker}${notebook%.*} --spark-pool-name spark3p3sm --file @$notebook_dir/$notebook --only-show-errors"
+done
 
 # 3) Setup pipelines
 # Note that the ordering below matters because pipelines that are referred to by other pipelines must be created first.
-eval "az synapse pipeline create --workspace-name $synapse_workspace --name 1_land_edfi --file @$version_dir/pipeline/1_land_edfi.json"
-eval "az synapse pipeline create --workspace-name $synapse_workspace --name 2_ingest_edfi --file @$version_dir/pipeline/2_ingest_edfi.json"
-eval "az synapse pipeline create --workspace-name $synapse_workspace --name 3_refine_edfi --file @$version_dir/pipeline/3_refine_edfi.json"
-eval "az synapse pipeline create --workspace-name $synapse_workspace --name 0_main_edfi --file @$version_dir/pipeline/0_main_edfi.json"
+pipeline_dir="$version_dir/pipeline"
+# Rename and create pipelines with version_marker prefix
+for pipeline_json in "1_land_edfi.json" "2_ingest_edfi.json" "3_refine_edfi.json" "0_main_edfi.json"; do
+    eval "az synapse pipeline create --workspace-name $synapse_workspace --name ${version_marker}${pipeline_json%.*} --file @$pipeline_dir/$pipeline_json"
+done
 
 echo "--> Setup complete. The Ed-Fi module assets for version $version have been installed in the specified synapse workspace: $synapse_workspace"
+echo "Version marker: $version_marker"
